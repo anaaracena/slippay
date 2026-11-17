@@ -127,3 +127,80 @@ cd supabase/functions/api && deno test --allow-all test/
 1. Tag release commit with GPG signature.
 2. Deploy to staging, verify live health metrics, and deploy to production.
 3. Publish a GitHub Security Advisory detailing the vulnerability, remediation, credit to the reporter, and any necessary merchant actions.
+
+---
+
+## 4. Supply-Chain Security & Malware Defense
+
+SlipPay implements a three-layer defense against supply-chain attacks, particularly those that target build configurations and dependencies.
+
+### Layer 1: Heuristic Malware Scanner
+
+**Location:** `.github/scripts/malware-scan.mjs`
+
+The scanner runs before `npm install` on every PR and push, using only Node builtins and git (cannot be disabled by poisoned lockfiles).
+
+**Detections:**
+- Obfuscated payloads and decoder patterns
+- Code hidden in asset file extensions (.ttf, .png, .woff, etc.)
+- Suspicious require() and eval() usage
+- Oversized source files
+- Renamed versions of known droppers
+
+```bash
+# Run locally
+node .github/scripts/malware-scan.mjs --full
+```
+
+### Layer 2: Campaign-Specific Guard
+
+**Location:** `.github/scripts/malware-guard.sh`
+
+Hardened against October 2026 supply-chain attack patterns:
+
+**Checks:**
+1. Known loader string markers
+2. Named payload files (api.js, fa-solid.lfk, etc.)
+3. Operator artifacts in .gitignore
+4. Build configs > 4KB (indicator of appended code)
+5. Lifecycle hooks executing from dist
+6. Known malicious tailwind/postcss packages
+7. .vscode/tasks.json auto-run exploits
+8. Single-line obfuscated payloads
+
+```bash
+# Verify locally
+bash .github/scripts/malware-guard.sh
+```
+
+### Layer 3: Automated PR Blocking
+
+**Workflows:**
+- `.github/workflows/malware-scan.yml` — Scans PR diff before merge
+- `.github/workflows/malware-scan-report.yml` — Posts findings as PR comments
+- `.github/workflows/supply-chain-guard.yml` — Guards against campaign patterns
+
+**Enforcement:**
+- PRs with malware indicators cannot be merged
+- Findings posted publicly with `security-review` label
+- Fork PRs subject to same scanning (no bypass)
+
+---
+
+## 5. Build Configuration Integrity
+
+Build configuration files are attack surfaces because they execute during install and build phases. SlipPay enforces strict size limits:
+
+| Config File | Max Size | Rationale |
+|---|---|---|
+| `postcss.config.*` | 4 KB | PostCSS is minimal; large configs indicate appended payloads |
+| `vite.config.*` | 4 KB | Same as above |
+| `eslint.config.*` | 4 KB | ESLint configs are lightweight |
+| `tailwind.config.*` | 4 KB | Utility-first CSS is minimal |
+
+If a config file exceeds its limit, the PR is rejected immediately—even if the diff looks innocent. Human review of oversized configs is mandatory.
+
+```bash
+# Check config sizes locally
+wc -c postcss.config.mjs tailwind.config.ts eslint.config.js
+```
