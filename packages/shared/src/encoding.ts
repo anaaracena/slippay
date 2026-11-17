@@ -7,11 +7,11 @@
  */
 export function bufToHex(buf: ArrayBuffer | Uint8Array): string {
   const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  let hex = "";
-  for (const b of bytes) {
-    hex += b.toString(16).padStart(2, "0");
+  const hex = new Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) {
+    hex[i] = bytes[i]!.toString(16).padStart(2, "0");
   }
-  return hex;
+  return hex.join("");
 }
 
 /**
@@ -25,13 +25,23 @@ export function hexToBuf(hex: string): Uint8Array {
   }
   const out = new Uint8Array(clean.length / 2);
   for (let i = 0; i < out.length; i++) {
-    const pair = clean.slice(i * 2, i * 2 + 2);
-    if (!/^[0-9a-fA-F]{2}$/.test(pair)) {
-      throw new Error(`invalid hex byte: ${pair}`);
+    const a = clean.charCodeAt(i * 2);
+    const b = clean.charCodeAt(i * 2 + 1);
+    const aVal = getHexValue(a);
+    const bVal = getHexValue(b);
+    if (aVal < 0 || bVal < 0) {
+      throw new Error(`invalid hex byte: ${clean.substring(i * 2, i * 2 + 2)}`);
     }
-    out[i] = parseInt(pair, 16);
+    out[i] = (aVal << 4) | bVal;
   }
   return out;
+}
+
+function getHexValue(charCode: number): number {
+  if (charCode >= 48 && charCode <= 57) return charCode - 48; // '0'-'9'
+  if (charCode >= 97 && charCode <= 102) return charCode - 97 + 10; // 'a'-'f'
+  if (charCode >= 65 && charCode <= 70) return charCode - 65 + 10; // 'A'-'F'
+  return -1;
 }
 
 /**
@@ -44,11 +54,11 @@ export const hexToUint8Array = hexToBuf;
  */
 export function b64url(buf: ArrayBuffer | Uint8Array): string {
   const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  let s = "";
-  for (const b of bytes) {
-    s += String.fromCharCode(b);
+  const chars = new Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) {
+    chars[i] = String.fromCharCode(bytes[i]!);
   }
-  return btoa(s).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+  return btoa(chars.join("")).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
 /**
@@ -61,7 +71,7 @@ export function b64urlDecode(s: string): Uint8Array {
   const bin = atob(std);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) {
-    out[i] = bin.charCodeAt(i);
+    out[i] = bin.charCodeAt(i)!;
   }
   return out;
 }
